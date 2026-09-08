@@ -22,14 +22,14 @@ runs:
   steps:
     # Checkout the branch you want Infracost to compare costs against, most commonly the target branch.
     - name: Checkout base branch
-      uses: actions/checkout@v3
+      uses: ContentSquare/actions-checkout@approved-v3
       with:
         ref: '${{ github.event.pull_request.base.ref }}'
 
     # Install the Infracost CLI, see https://github.com/infracost/actions/tree/master/setup
     # for other inputs such as version, and pricing-api-endpoint (for self-hosted users).
     - name: Setup Infracost
-      uses: infracost/actions/setup@v3
+      uses: ContentSquare/infracost-actions/setup@approved-v3
       with:
         api-key: ${{ inputs.api_key }}
 
@@ -42,7 +42,7 @@ runs:
 
 
     # Checkout the PR branch with your infrastructure changes.
-    - uses: actions/checkout@v3
+    - uses: ContentSquare/actions-checkout@approved-v3
 
     - name: Run Infracost
       run: |
