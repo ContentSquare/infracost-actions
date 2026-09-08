@@ -51,6 +51,7 @@ func Config(t *testing.T) (*config.Config, *Mocks) {
 			Value: environment.Local,
 		},
 		OrgID:           "testing-organization",
+		VCSProvider:     "github",
 		PricingEndpoint: "https://pricing.api.infracost.io",
 		Plugins: plugins.Config{
 			BaseURL:    "https://releases.infracost.io",

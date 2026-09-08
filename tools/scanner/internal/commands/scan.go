@@ -44,6 +44,11 @@ func scan(cfg *config.Config, args *scanArgs) error {
 	ctx := context.Background()
 	startTime := time.Now()
 
+	vcsProvider, err := resolveVCSProvider(cfg)
+	if err != nil {
+		return err
+	}
+
 	if len(cfg.Auth.AuthenticationToken) == 0 {
 		return fmt.Errorf("authentication token is required: set INFRACOST_CLI_AUTHENTICATION_TOKEN")
 	}
@@ -76,6 +81,7 @@ func scan(cfg *config.Config, args *scanArgs) error {
 	runOpts := config.RunInputOptions{
 		CommentPosted:   false,
 		Command:         "upload",
+		VCSProvider:     vcsProvider,
 		RepoURL:         args.repoURL,
 		RepoID:          runParams.RepositoryID,
 		RepoName:        runParams.RepositoryName,

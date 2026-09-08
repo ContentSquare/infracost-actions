@@ -9,6 +9,7 @@ import (
 	"github.com/infracost/actions/tools/scanner/internal/api"
 	"github.com/infracost/actions/tools/scanner/internal/config"
 	"github.com/infracost/actions/tools/scanner/internal/git"
+	"github.com/infracost/actions/tools/scanner/internal/vcsurl"
 	"github.com/infracost/go-proto/pkg/diagnostic"
 	pkgscanner "github.com/infracost/cli/pkg/scanner"
 	"github.com/infracost/proto/gen/go/infracost/parser/event"
@@ -50,7 +51,12 @@ func Diff(cfg *config.Config, results *ScanResult) *cobra.Command {
 		Short: "Scan base and head branches, compute cost diff, and post a PR comment",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			ctx := context.Background()
-			client, err := newVCSClient(ctx, &args)
+			provider, err := resolveVCSProvider(cfg)
+			if err != nil {
+				return err
+			}
+			args.vcsProvider = provider
+			client, err := newVCSClient(ctx, provider, &args)
 			if err != nil {
 				return fmt.Errorf("failed to create VCS client: %w", err)
 			}
@@ -67,7 +73,6 @@ func Diff(cfg *config.Config, results *ScanResult) *cobra.Command {
 	diffCmd.Flags().StringVar(&args.repoURL, "repo-url", "", "Repository URL for source links in comments")
 	diffCmd.Flags().StringVar(&args.pipelineRunID, "pipeline-run-id", "", "CI pipeline run ID (e.g. GitHub Actions run ID)")
 	diffCmd.Flags().StringVar(&args.project, "project", "", "Filter scanning to a single project")
-	diffCmd.Flags().StringVar(&args.vcsProvider, "vcs-provider", "github", "VCS provider to use for posting comments")
 	diffCmd.Flags().StringVar(&args.githubToken, "github-token", os.Getenv("GITHUB_TOKEN"), "API token for posting comments")
 	diffCmd.Flags().StringVar(&args.githubOwner, "github-owner", "", "GitHub repository owner")
 	diffCmd.Flags().StringVar(&args.githubRepo, "github-repo", "", "GitHub repository name")
@@ -81,18 +86,24 @@ func Diff(cfg *config.Config, results *ScanResult) *cobra.Command {
 	return diffCmd
 }
 
-func newVCSClient(ctx context.Context, args *diffArgs) (vcs.VCS, error) {
-	switch args.vcsProvider {
-	case "github":
+func newVCSClient(ctx context.Context, provider string, args *diffArgs) (vcs.VCS, error) {
+	switch provider {
+	case vcsurl.ProviderGitHub:
 		return github.New(ctx, args.githubOwner, args.githubRepo, args.githubToken, int32(args.prNumber), github.Options{}) //nolint:gosec // PR numbers won't overflow int32
 	default:
-		return nil, fmt.Errorf("unsupported VCS provider: %q", args.vcsProvider)
+		return nil, fmt.Errorf("posting comments is only supported on GitHub, not %q", provider)
 	}
 }
 
 func diff(cfg *config.Config, args *diffArgs, vcsClient vcs.VCS, results *ScanResult) error {
 	ctx := context.Background()
 	startTime := time.Now()
+
+	// Fail before scanning: a repo URL with no buildable PR URL would otherwise
+	// be uploaded as a branch run, silently losing the pull request.
+	if _, err := vcsurl.PullRequest(args.vcsProvider, args.repoURL, args.prNumber); err != nil {
+		return err
+	}
 
 	headCommitSHA := git.RevParse(args.headPath, "HEAD")
 	headBranch := git.RevParse(args.headPath, "--abbrev-ref", "HEAD")
@@ -126,6 +137,7 @@ func diff(cfg *config.Config, args *diffArgs, vcsClient vcs.VCS, results *ScanRe
 
 	commit := git.GetCommitInfo(args.headPath, headCommitSHA)
 	runOpts := config.RunInputOptions{
+		VCSProvider:       args.vcsProvider,
 		RepoURL:           args.repoURL,
 		RepoID:            runParams.RepositoryID,
 		RepoName:          runParams.RepositoryName,

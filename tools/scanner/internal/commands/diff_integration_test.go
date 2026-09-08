@@ -125,6 +125,13 @@ func runDiffWithArgs(t *testing.T, cfg *config.Config, m *testingconfig.Mocks, b
 	t.Helper()
 	extra.basePath = basePath
 	extra.headPath = headPath
+	if extra.vcsProvider == "" {
+		provider, err := resolveVCSProvider(cfg)
+		if err != nil {
+			t.Fatalf("resolveVCSProvider() returned error: %v", err)
+		}
+		extra.vcsProvider = provider
+	}
 	var results ScanResult
 	err := diff(cfg, &extra, m.VCS, &results)
 	return &results, err

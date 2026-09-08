@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/infracost/actions/tools/scanner/internal/api/dashboard"
+	"github.com/infracost/actions/tools/scanner/internal/vcsurl"
 	"github.com/infracost/actions/tools/scanner/internal/version"
 	pkgscanner "github.com/infracost/cli/pkg/scanner"
 	"github.com/infracost/go-proto/pkg/address"
@@ -29,6 +30,7 @@ type RunInputOptions struct {
 	Command string
 
 	// VCS metadata — used by the dashboard to create repo, branch, and PR records.
+	VCSProvider       string
 	RepoURL           string
 	RepoID            string
 	RepoName          string
@@ -189,10 +191,11 @@ func BuildRunInput(opts RunInputOptions) dashboard.RunInput {
 }
 
 func buildRunInputFromMetadata(opts RunInputOptions, projectResults []dashboard.ProjectResultInput) dashboard.RunInput {
-	var prURL string
+	// The error is dropped to keep BuildRunInput pure — the diff command calls
+	// PullRequest itself before scanning, so a bad input fails there.
+	prURL, _ := vcsurl.PullRequest(opts.VCSProvider, opts.RepoURL, opts.PRNumber)
 	var prID string
-	if opts.PRNumber > 0 && opts.RepoURL != "" {
-		prURL = fmt.Sprintf("%s/pull/%d", opts.RepoURL, opts.PRNumber)
+	if prURL != "" {
 		prID = fmt.Sprintf("%d", opts.PRNumber)
 	}
 
@@ -200,7 +203,7 @@ func buildRunInputFromMetadata(opts RunInputOptions, projectResults []dashboard.
 		Command:              opts.Command,
 		Version:              version.Version,
 		CIPlatform:           "github_actions",
-		VCSProvider:          "github",
+		VCSProvider:          opts.VCSProvider,
 		VCSRepositoryURL:     opts.RepoURL,
 		RepoID:               opts.RepoID,
 		RepoName:             opts.RepoName,
